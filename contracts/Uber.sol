@@ -9,6 +9,15 @@ contract Uber is Proxiable, Initializable {
      
      // STATE VARIABLES //
     address admin;
+    address[] driversAddress;
+    address[] driverReviewers;
+    address[] passengersAddress;
+    address[] approvedDrivers;
+    address tokenAddress;
+    uint public driveFeePerTime;
+    uint public driveFeePerDistance;
+
+    uint public rideCount;
 
        function constructor1(address _tokenAddress) public {
         require(admin == address(0), "Already initalized");
@@ -27,5 +36,34 @@ contract Uber is Proxiable, Initializable {
      function updateCode(address newCode) onlyOwner public {
         updateCodeAddress(newCode);
     }
+
+     function encode(address _tokenAddress) external pure returns (bytes memory) {
+        return abi.encodeWithSignature("constructor1(address)", _tokenAddress);
+    }
+
+    struct DriverDetails{
+        address driversAddress;
+        string driversName;
+        uint112 driversLicenseIdNo;
+        bool registered;
+        bool approved;
+        bool rideRequest; // When a user request for ride
+        bool acceptRide; // Driver accepts requested
+        bool booked; // When driver accepts ride
+        uint timePicked;
+        uint successfulRide;
+        address currentPassenger;
+        DriverVault vaultAddress;
+    }
+
+       struct PassengerDetails{
+        address passengerAddress;
+        bool registered;
+        bool ridepicked;
+        PassengerVault vaultAddress;
+    }
+
+    mapping(address => DriverDetails) driverDetails;
+    mapping(address => PassengerDetails) passengerDetails;
 
 }
