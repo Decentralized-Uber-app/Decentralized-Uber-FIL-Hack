@@ -3,7 +3,10 @@ pragma solidity ^0.8.9;
 
 import "./proxiable.sol";
 import "./AccessControlUpgradeable.sol";
-contract Uber is Proxiable, Initializable {
+import "./DriverVault.sol";
+import "./PassengerVault.sol";
+
+contract Uber is Initializable, AccessControlUpgradeable, Proxiable {
      
     bytes32 public constant REVIEWER_ROLE = keccak256("REVIEWER_ROLE"); 
      
@@ -19,7 +22,7 @@ contract Uber is Proxiable, Initializable {
 
     uint public rideCount;
 
-       function constructor1(address _tokenAddress) public {
+    function constructor1(address _tokenAddress) public {
         require(admin == address(0), "Already initalized");
         admin = msg.sender;
          tokenAddress = _tokenAddress;
@@ -65,5 +68,44 @@ contract Uber is Proxiable, Initializable {
 
     mapping(address => DriverDetails) driverDetails;
     mapping(address => PassengerDetails) passengerDetails;
+
+      ///////////DRIVERS //////////
+    function driversRegister(string memory _drivername, uint112 _driversLicenseIdNo) public {
+        DriverDetails storage dd = driverDetails[msg.sender];
+        require(dd.registered == false, "already registered");
+        dd.driversAddress = msg.sender;
+        dd.driversName = _drivername;
+        dd.registered = true;
+        dd.driversLicenseIdNo = _driversLicenseIdNo;
+        driversAddress.push(msg.sender); 
+    }
+
+    function reviewDriver(address _driversAddress) public onlyRole(REVIEWER_ROLE){
+        DriverDetails storage dd = driverDetails[_driversAddress];
+        require(dd.driversAddress == _driversAddress, "Driver not registered");
+        require(dd.approved == false, "driver already approved");
+        dd.approved = true;
+
+        // deploy a new driver vault contract for the driver whose address is passed
+        DriverVault newVault = new DriverVault(_driversAddress, tokenAddress);
+        dd.vaultAddress = newVault;
+    }
+
+    function isUserInRide (address _owner) public view returns (bool rideOngoing) {
+        PassengerDetails memory pd = passengerDetails[_owner];
+        rideOngoing = pd.ridepicked;
+    }
+    function viewAllDrivers () external view returns(address[] memory) {
+        return driversAddress;
+    }
+
+    function changeTokenAddress(address _newTokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE){
+        tokenAddress = _newTokenAddress;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == admin, "Only owner is allowed to perform this action");
+        _;
+    }
 
 }
