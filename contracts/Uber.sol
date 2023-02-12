@@ -7,6 +7,9 @@ import "./DriverVault.sol";
 import "./PassengerVault.sol";
 
 contract Uber is Initializable, AccessControlUpgradeable, Proxiable {
+      // EVENTS
+    event RideAccepted(address indexed _driverAddres, uint256 indexed _timePicked);
+
      
     bytes32 public constant REVIEWER_ROLE = keccak256("REVIEWER_ROLE"); 
      
@@ -105,10 +108,76 @@ contract Uber is Initializable, AccessControlUpgradeable, Proxiable {
         pd.vaultAddress = newVault;
     }
 
+    function orderRide(address _driver, uint _distance) public {
+        PassengerDetails storage pd = passengerDetails[msg.sender];
+        DriverDetails storage DD = driverDetails[_driver];
+
+        if(DD.rideRequest == true && DD.currentPassenger == msg.sender){
+            revert("you have active request");
+        }
+
+        address passengerVault = address(pd.vaultAddress);
+        uint estimatedDriveFee = calFeeEstimate(_distance);
+        require(IERC20(tokenAddress).balanceOf(passengerVault) >= estimatedDriveFee, "Insufficient balance");
+        require(pd.registered == true, "not registered");
+        require(pd.ridepicked == false, "You have an active ride");
+        
+        require(DD.approved == true, "Driver approval pending");
+        require(DD.booked == false, "Passenger booked");
+        DD.rideRequest = true;
+        DD.currentPassenger = msg.sender;
+        pd.ridepicked = true;
+    }
+
     function isUserInRide (address _owner) public view returns (bool rideOngoing) {
         PassengerDetails memory pd = passengerDetails[_owner];
         rideOngoing = pd.ridepicked;
     }
+    
+    function driverAcceptRide() public {
+        DriverDetails storage DD = driverDetails[msg.sender];
+        require(DD.registered == true, "not a driver");
+        require(DD.rideRequest == true, "No ride requested");
+        DD.booked = true;
+        DD.timePicked = block.timestamp;
+        rideCount += 1;
+
+        emit RideAccepted(msg.sender, DD.timePicked);
+    }
+
+    function endride() public{
+        DriverDetails storage dd = driverDetails[msg.sender];
+        require(dd.registered == true, "not a driver");
+        PassengerDetails storage pd = passengerDetails[dd.currentPassenger];
+        require(dd.booked == true, "you have no active ride");
+        uint amount = calcRealFee(dd.driversAddress);
+        IERC20(tokenAddress).transferFrom(address(pd.vaultAddress), address(dd.vaultAddress), amount);
+        dd.currentPassenger = address(0);
+        dd.booked = false;
+        dd.acceptRide = false;
+        dd.rideRequest = false;
+        dd.successfulRide += 1;
+        pd.ridepicked = false;
+    }
+
+    function calFeeEstimate (uint _distance) public view returns(uint estimateFee) {
+        estimateFee = _distance * driveFeePerDistance;
+    }
+
+    function calcRealFee(address driverAddress) internal view returns(uint256 amountToPay){
+        DriverDetails storage dd = driverDetails[driverAddress];
+        uint totalTime = block.timestamp - dd.timePicked;
+        amountToPay = totalTime * driveFeePerTime;
+    }
+
+     function setRideFeePerTime (uint fee) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        driveFeePerTime = fee;
+    }
+
+    function setRideFeePerDistance (uint fee) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        driveFeePerDistance = fee;
+    }
+
     function viewAllDrivers () external view returns(address[] memory) {
         return driversAddress;
     }
