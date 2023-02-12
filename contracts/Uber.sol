@@ -91,12 +91,30 @@ contract Uber is Initializable, AccessControlUpgradeable, Proxiable {
         dd.vaultAddress = newVault;
     }
 
+
+    //////////PASSENGER/////////
+    function passengerRegistration() public {
+        PassengerDetails storage pd = passengerDetails[msg.sender];
+        require(pd.registered == false, "already registered");
+        pd.passengerAddress = msg.sender;
+        pd.registered = true;
+        passengersAddress.push(msg.sender);
+
+        // deploy a new passenger vault contract for the passenger whose address is passed
+        PassengerVault newVault = new PassengerVault(msg.sender, tokenAddress, address(this));
+        pd.vaultAddress = newVault;
+    }
+
     function isUserInRide (address _owner) public view returns (bool rideOngoing) {
         PassengerDetails memory pd = passengerDetails[_owner];
         rideOngoing = pd.ridepicked;
     }
     function viewAllDrivers () external view returns(address[] memory) {
         return driversAddress;
+    }
+
+    function viewAllPassengers () external view returns(address[] memory) {
+        return passengersAddress;
     }
 
     function changeTokenAddress(address _newTokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE){
