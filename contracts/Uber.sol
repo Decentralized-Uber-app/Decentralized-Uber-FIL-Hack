@@ -1,53 +1,52 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.9;
+//SPDX-License-Identifier: MIT
+pragma solidity ^0.8.4;
 
 import "./proxiable.sol";
-import "./AccessControlUpgradeable.sol";
-import "./DriverVault.sol";
+// Uncomment this line to use console.log
+// import "hardhat/console.sol";
 import "./PassengerVault.sol";
+import "./DriverVault.sol";
+import "./AccessControlUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 contract Uber is Initializable, AccessControlUpgradeable, Proxiable {
+    
       // EVENTS
     event RideAccepted(address indexed _driverAddres, uint256 indexed _timePicked);
 
-     
-    bytes32 public constant REVIEWER_ROLE = keccak256("REVIEWER_ROLE"); 
-     
-     // STATE VARIABLES //
-    address admin;
+    bytes32 public constant REVIEWER_ROLE = keccak256("REVIEWER_ROLE");
+
+    // STATE VARIABLES //
+    address public admin;
     address[] driversAddress;
     address[] driverReviewers;
     address[] passengersAddress;
     address[] approvedDrivers;
-    address tokenAddress;
+    address public tokenAddress;
     uint public driveFeePerTime;
     uint public driveFeePerDistance;
 
     uint public rideCount;
 
-    function constructor1(address _tokenAddress) public {
-        require(admin == address(0), "Already initalized");
-        admin = msg.sender;
-         tokenAddress = _tokenAddress;
-    }
 
-     function initialize() public initializer {
-        require(msg.sender == admin, "not admin");
+     function initialize(address _tokenAddress) public initializer {
+        require(admin == address(0), "Already initalized");
+        tokenAddress = _tokenAddress;
 
         __AccessControl_init();
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(REVIEWER_ROLE, msg.sender);
     }
 
-     function updateCode(address newCode) onlyOwner public {
+     function updateCode(address newCode) onlyRole(DEFAULT_ADMIN_ROLE) public {
         updateCodeAddress(newCode);
     }
 
-     function encode(address _tokenAddress) external pure returns (bytes memory) {
-        return abi.encodeWithSignature("constructor1(address)", _tokenAddress);
+    function encode(address _tokenAddress) external pure returns (bytes memory) {
+        return abi.encodeWithSignature("initialize(address)", _tokenAddress);
     }
 
-    struct DriverDetails{
+        struct DriverDetails{
         address driversAddress;
         string driversName;
         uint112 driversLicenseIdNo;
@@ -62,7 +61,7 @@ contract Uber is Initializable, AccessControlUpgradeable, Proxiable {
         DriverVault vaultAddress;
     }
 
-       struct PassengerDetails{
+    struct PassengerDetails{
         address passengerAddress;
         bool registered;
         bool ridepicked;
@@ -72,7 +71,7 @@ contract Uber is Initializable, AccessControlUpgradeable, Proxiable {
     mapping(address => DriverDetails) driverDetails;
     mapping(address => PassengerDetails) passengerDetails;
 
-      ///////////DRIVERS //////////
+        ///Drivers ////
     function driversRegister(string memory _drivername, uint112 _driversLicenseIdNo) public {
         DriverDetails storage dd = driverDetails[msg.sender];
         require(dd.registered == false, "already registered");
@@ -80,7 +79,7 @@ contract Uber is Initializable, AccessControlUpgradeable, Proxiable {
         dd.driversName = _drivername;
         dd.registered = true;
         dd.driversLicenseIdNo = _driversLicenseIdNo;
-        driversAddress.push(msg.sender); 
+        driversAddress.push(msg.sender);
     }
 
     function reviewDriver(address _driversAddress) public onlyRole(REVIEWER_ROLE){
@@ -94,8 +93,7 @@ contract Uber is Initializable, AccessControlUpgradeable, Proxiable {
         dd.vaultAddress = newVault;
     }
 
-
-    //////////PASSENGER/////////
+    //Passenger////////
     function passengerRegistration() public {
         PassengerDetails storage pd = passengerDetails[msg.sender];
         require(pd.registered == false, "already registered");
@@ -129,11 +127,6 @@ contract Uber is Initializable, AccessControlUpgradeable, Proxiable {
         pd.ridepicked = true;
     }
 
-    function isUserInRide (address _owner) public view returns (bool rideOngoing) {
-        PassengerDetails memory pd = passengerDetails[_owner];
-        rideOngoing = pd.ridepicked;
-    }
-    
     function driverAcceptRide() public {
         DriverDetails storage DD = driverDetails[msg.sender];
         require(DD.registered == true, "not a driver");
@@ -144,6 +137,7 @@ contract Uber is Initializable, AccessControlUpgradeable, Proxiable {
 
         emit RideAccepted(msg.sender, DD.timePicked);
     }
+  
 
     function endride() public{
         DriverDetails storage dd = driverDetails[msg.sender];
@@ -164,13 +158,19 @@ contract Uber is Initializable, AccessControlUpgradeable, Proxiable {
         estimateFee = _distance * driveFeePerDistance;
     }
 
+    function isUserInRide (address _owner) public view returns (bool rideOngoing) {
+        PassengerDetails memory pd = passengerDetails[_owner];
+        rideOngoing = pd.ridepicked;
+    }
+
     function calcRealFee(address driverAddress) internal view returns(uint256 amountToPay){
         DriverDetails storage dd = driverDetails[driverAddress];
         uint totalTime = block.timestamp - dd.timePicked;
         amountToPay = totalTime * driveFeePerTime;
     }
 
-     function setRideFeePerTime (uint fee) external onlyRole(DEFAULT_ADMIN_ROLE) {
+
+    function setRideFeePerTime (uint fee) external onlyRole(DEFAULT_ADMIN_ROLE) {
         driveFeePerTime = fee;
     }
 
@@ -178,21 +178,16 @@ contract Uber is Initializable, AccessControlUpgradeable, Proxiable {
         driveFeePerDistance = fee;
     }
 
+
     function viewAllDrivers () external view returns(address[] memory) {
         return driversAddress;
     }
-
     function viewAllPassengers () external view returns(address[] memory) {
         return passengersAddress;
     }
 
     function changeTokenAddress(address _newTokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE){
         tokenAddress = _newTokenAddress;
-    }
-
-    modifier onlyOwner() {
-        require(msg.sender == admin, "Only owner is allowed to perform this action");
-        _;
     }
 
 }
